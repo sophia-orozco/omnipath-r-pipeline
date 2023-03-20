@@ -62,7 +62,7 @@ find_signed_paths <- function(paths,db){
     #reg=0 -> pattern=^gene$ (default, exact word)
     #reg=1 -> pattern=^gene//character or digit
     #reg=2 -> pattern=gene 
-search_gene <-function(gene, db,reg=0, patt=NULL){
+search_gene <-function(gene, db,reg=0){
   match=NULL
   gene_names=NULL
   
