@@ -32,9 +32,10 @@ find_signed_paths <- function(paths,db){
       int_db=db[which(db$source_genesymbol==paths[[j]][i]&db$target_genesymbol==paths[[j]][i+1]),]
       
       if(length(int_db$is_stimulation)>1){
-        if(length(unique(int_db[1:9]))){
-          unique()
-        }
+        signed_paths[[j]][k]<- paths[[j]][i]
+        signed_paths[[j]][k+1]<- "ERROR"
+        k=k+2
+        break
       }
       
       if(int_db$is_stimulation&!int_db$is_inhibition){
@@ -54,8 +55,8 @@ find_signed_paths <- function(paths,db){
       }
     }
   }
-  #return(signed_paths)
-  return(test)
+  return(signed_paths)
+  #return(test)
 }
 
 #three levels for regular expressions: 
