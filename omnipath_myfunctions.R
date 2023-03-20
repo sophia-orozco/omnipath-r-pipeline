@@ -31,7 +31,7 @@ find_signed_paths <- function(paths,db){
     for (i in 1:(length(paths[[j]])-1)) { #for each interaction
       int_db=db[which(db$source_genesymbol==paths[[j]][i]&db$target_genesymbol==paths[[j]][i+1]),]
       
-      if(length(int_db$is_stimulation)>1){
+      if(length(int_db$is_stimulation)>1|!dim(int_db)[1]){
         signed_paths[[j]][k]<- paths[[j]][i]
         signed_paths[[j]][k+1]<- "ERROR"
         k=k+2
