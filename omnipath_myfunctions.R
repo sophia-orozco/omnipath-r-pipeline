@@ -58,14 +58,20 @@ find_signed_paths <- function(paths,db){
   return(test)
 }
 
-# when reg=1, checks for regular expression that allows any word after the specified pattern (gene name)
-search_gene <-function(gene, db,reg=1){
+#three levels for regular expressions: 
+    #reg=0 -> pattern=^gene$ (default, exact word)
+    #reg=1 -> pattern=^gene//character or digit
+    #reg=2 -> pattern=gene 
+search_gene <-function(gene, db,reg=0, patt=NULL){
   match=NULL
   gene_names=NULL
-  if(reg){ 
-    gene_reg= paste(gene, "\\w", sep = "")
-    gene <- c(gene, gene_reg)
+  
+  if (reg==1){
+    gene=c(paste("^",gene, "\\d", sep = ""),paste("^",gene, "\\w", sep = ""))
+  }else if (!reg){
+    gene=paste("^",gene, "$", sep = "")
   }
+    
   for (i in 1:length(gene)) {
     new_match=grep(gene[i], db$target_genesymbol)
     gene_names=c(gene_names,db[new_match,]$target_genesymbol)
