@@ -1,5 +1,6 @@
 library(dplyr)
 
+##################################################################################
 # find paths nodes interactions in any db.
 find_paths_db <- function(paths,db){
   interac_db = NULL
@@ -12,6 +13,7 @@ find_paths_db <- function(paths,db){
   return(interac_db)
 }
 
+##################################################################################
 # Takes any interaction db and returns those with inhibition or stimulation, 
 # consensus direction and removes interactions from "u_source".
 conf_interactions_filter <-function(interact_db, u_source){
@@ -22,8 +24,10 @@ conf_interactions_filter <-function(interact_db, u_source){
   return(interact_conf)
 }
 
+##################################################################################
 # From paths list, returns a list with the interactions (pos, neg or undetermined)
-find_signed_paths <- function(paths,db){
+# Type=1 returns interaction type
+find_signed_paths <- function(paths,db,type_flag=0){
   test=0
   signed_paths <- paths
   for (j in 1:length(paths)) {
@@ -45,7 +49,10 @@ find_signed_paths <- function(paths,db){
       } else{
         signed_interaction= "--(u)-->"
       }
-      
+      if(type_flag){
+        type=int_db$type
+        signed_interaction=paste(signed_interaction, type, sep = " ")
+      }
       signed_paths[[j]][k]<- paths[[j]][i]
       signed_paths[[j]][k+1]<- signed_interaction
       k=k+2
@@ -59,10 +66,14 @@ find_signed_paths <- function(paths,db){
   #return(test)
 }
 
+##################################################################################
 #three levels for regular expressions: 
     #reg=0 -> pattern=^gene$ (default, exact word)
     #reg=1 -> pattern=^gene//character or digit
     #reg=2 -> pattern=gene 
+#targets and sources do not include direct feedback 
+#only works with db with following columns: "source_genesymbol"     "target_genesymbol"    
+# "is_directed"           "is_stimulation"        "is_inhibition"
 search_gene <-function(gene, db,reg=0){
   match=NULL
   gene_names=NULL
@@ -84,8 +95,36 @@ search_gene <-function(gene, db,reg=0){
   gene_names<-unique(gene_names)
   db= db[unique(match),-c(1,2,5,9,10)]
   
-  genes_db <- list("db" = db, "names" = gene_names)
-
+  targets=subset(db, !(target_genesymbol %in% gene_names))
+  sources=subset(db, !(source_genesymbol %in% gene_names))
+  
+  targets_stimulation=unique(filter(targets, is_stimulation&!is_inhibition))
+  targets_stimulation=select(targets_stimulation,target_genesymbol, type)
+  
+  targets_inhibition=unique(filter(targets, !is_stimulation&is_inhibition))
+  targets_inhibition=select(targets_inhibition,target_genesymbol, type)
+  
+  sources_stimulation=unique(filter(sources, is_stimulation&!is_inhibition))
+  sources_stimulation=select(sources_stimulation,source_genesymbol, type)
+  
+  sources_inhibition=unique(filter(sources, !is_stimulation&is_inhibition))
+  sources_inhibition=select(sources_inhibition,source_genesymbol, type)
+  
+  others= subset(db, !(source_genesymbol %in%c(targets_stimulation,targets_inhibition,sources_stimulation,sources_inhibition,gene_names)))
+  others= unique(c(others$target_genesymbol,others$source_genesymbol))
+  
+  dfs <- c("targets_stimulation", "targets_inhibition", "sources_stimulation", "sources_inhibition")
+  
+  for(df in dfs)
+    assign(df, setNames(get(df),  c("name", "type")))
+  
+  genes_db <- list("db" = db,
+                   "names" = gene_names, 
+                   "activates"=targets_stimulation,
+                   "inhibits"= targets_inhibition,
+                   "activated_by" =sources_stimulation,
+                   "inhibited_by" = sources_inhibition,
+                   "others"=others)
   
   return(genes_db) 
 }
