@@ -28,7 +28,7 @@ conf_interactions_filter <-function(interact_db, u_source){
 # From paths list, returns a list with the interactions (pos, neg or undetermined)
 # Type=1 returns interaction type
 # make sure the db used to find the paths is the same one used here 
-find_signed_paths <- function(paths,db,type_flag=0){
+find_signed_paths <- function(paths,db,type_flag=0,type_option="none"){
   signed_paths <- paths
   for (j in 1:length(paths)) {
     k=1
@@ -79,7 +79,14 @@ find_signed_paths <- function(paths,db,type_flag=0){
         signed_paths[[j]][k]<- paths[[j]][i+1] 
       }
     }
+    if(type_flag&type_option!="none"){ #evaluate for every path 
+      if(!grepl(type_option, signed_paths[j])){ #if not interaction type, empty (with lenght 1)
+        signed_paths[j]<-0
+      }
+    }
   }
+  #returns only paths longer than 1 element 
+  signed_paths=signed_paths[lengths(signed_paths)>1]
   return(signed_paths)
 }
 
