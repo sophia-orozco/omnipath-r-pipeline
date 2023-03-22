@@ -28,24 +28,35 @@ conf_interactions_filter <-function(interact_db, u_source){
 # From paths list, returns a list with the interactions (pos, neg or undetermined)
 # Type=1 returns interaction type
 find_signed_paths <- function(paths,db,type_flag=0){
-  test=0
   signed_paths <- paths
   for (j in 1:length(paths)) {
     k=1
-    for (i in 1:(length(paths[[j]])-1)) { #for each interaction
+    for (i in 1:(length(paths[[j]])-1)) { 
+      #select db for each interaction
       int_db=db[which(db$source_genesymbol==paths[[j]][i]&db$target_genesymbol==paths[[j]][i+1]),]
-      
+      #if more types of interaction are found
       if(length(int_db$is_stimulation)>1|!dim(int_db)[1]){
-        signed_paths[[j]][k]<- paths[[j]][i]
-        signed_paths[[j]][k+1]<- "ERROR"
-        k=k+2
-        break
+      #if the interactions do not have the same sign make them have the same sign
+          if(!dim(unique(int_db[,1:10]))[1]==1){
+              if(1 %in% int_db$is_stimulation){ #if at least one is a stimulation
+                int_db$is_stimulation==rep(1, dim(int_db)[1])
+              }
+              if(1 %in% int_db$is_inhibition){ #if at least one is an inhibition
+                int_db$is_inhibition==rep(1, dim(int_db)[1])
+              }
+          }
+        #keep one row and collapse interaction type
+        int_db$type=paste(int_db$type,collapse='/')
+        int_db$type=unique(int_db$type)
+        int_db=int_db %>% distinct(type, .keep_all = TRUE)
       }
       
       if(int_db$is_stimulation&!int_db$is_inhibition){
         signed_interaction= "--(+)-->"
       } else if (!int_db$is_stimulation&int_db$is_inhibition){
         signed_interaction= "--(-)-->"
+      } else if (int_db$is_stimulation&int_db$is_inhibition){
+        signed_interaction= "--(b)-->"
       } else{
         signed_interaction= "--(u)-->"
       }
@@ -63,7 +74,6 @@ find_signed_paths <- function(paths,db,type_flag=0){
     }
   }
   return(signed_paths)
-  #return(test)
 }
 
 ##################################################################################
@@ -127,4 +137,9 @@ search_gene <-function(gene, db,reg=0){
                    "others"=others)
   
   return(genes_db) 
+}
+
+
+if(dim(unique(int_db[,1:10]))[1]==1){
+  print(a)
 }
