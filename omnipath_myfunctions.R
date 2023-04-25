@@ -152,8 +152,3 @@ search_gene <-function(gene, db,reg=0){
   
   return(genes_db) 
 }
-
-
-if(dim(unique(int_db[,1:10]))[1]==1){
-  print(a)
-}
