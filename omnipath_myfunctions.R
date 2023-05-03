@@ -1,4 +1,7 @@
 library(dplyr)
+library(OmnipathR)
+library(igraph)
+library(igraphdata)
 
 ##################################################################################
 # find paths nodes interactions in any db.
@@ -12,7 +15,53 @@ find_paths_db <- function(paths,db){
   }
   return(interac_db)
 }
+##################################################################################
+# plot graph from interactions
+plot_paths <- function(start_nodes,end_nodes,db,type=0){
+  gr_graph <- interaction_graph(db)
+  paths <-find_all_paths(graph = gr_graph, 
+                         start = start_nodes, 
+                         end = end_nodes, attr = 'name')
+  paths_db=find_paths_db(paths,db)
+  paths_db=paths_db[-which(paths_db$is_stimulation==0&paths_db$is_inhibition==0),]
+  gr_graph <- interaction_graph(paths_db)
+  
+  ecol=(rep("gray", ecount(gr_graph)))
+  ecol[E(gr_graph)$is_stimulation==1]="chartreuse4"
+  ecol[E(gr_graph)$is_inhibition==1]="brown1"
+  
+  etype=(rep("solid", ecount(gr_graph)))
+  if(type){
+    etype[E(gr_graph)$is_stimulation==1 &
+           (E(gr_graph)$type=="transcriptional"|
+              E(gr_graph)$type=="mirna_transcriptional")]="solid"
+    etype[E(gr_graph)$is_stimulation==1&
+           E(gr_graph)$type=="post_transcriptional"]="dashed"
+    etype[E(gr_graph)$is_stimulation==1&
+           E(gr_graph)$type=="post_translational"]="dashed"
+    
+    etype[E(gr_graph)$is_inhibition==1 &
+           (E(gr_graph)$type=="transcriptional"|
+              E(gr_graph)$type=="mirna_transcriptional")]="solid"
+    etype[E(gr_graph)$is_inhibition==1&
+           E(gr_graph)$type=="post_transcriptional"]="dashed"
+    etype[E(gr_graph)$is_inhibition==1&
+           E(gr_graph)$type== "post_translational"]="dashed"
+  } 
+  
+  plot(gr_graph, edge.color=ecol, vertex.label.color="black",
+       vertex.label.cex=.8, vertex.size=20, vertex.shape="circle",vertex.color="white",
+       vertex.label.family="Helvetica",edge.curved=0.8,
+       edge.arrow.size=0.5,layout=layout_with_fr,edge.lty=etype)
+  if(type){
+    legend("bottomleft",legend = c("transcriptional","post_transcriptional/translational"),
+           lty=c("solid","dashed"), cex = 0.8, bty = "n", ncol = 1)
+  }
 
+  plot_res <- recordPlot()
+  
+  return(plot_res)
+}
 ##################################################################################
 # Takes any interaction db and returns those with inhibition or stimulation, 
 # consensus direction and removes interactions from "u_source".
@@ -28,7 +77,11 @@ conf_interactions_filter <-function(interact_db, u_source){
 # From paths list, returns a list with the interactions (pos, neg or undetermined)
 # Type=1 returns interaction type
 # make sure the db used to find the paths is the same one used here 
-find_signed_paths <- function(paths,db,type_flag=0,type_option="none"){
+find_signed_paths <- function(start_nodes,end_nodes,db,type_flag=0,type_option="none"){
+  gr_graph <- interaction_graph(db)
+  paths <-find_all_paths(graph = gr_graph, 
+                 start = start_nodes, 
+                 end = end_nodes, attr = 'name')
   signed_paths <- paths
   for (j in 1:length(paths)) {
     k=1
@@ -95,60 +148,56 @@ find_signed_paths <- function(paths,db,type_flag=0,type_option="none"){
     #reg=0 -> pattern=^gene$ (default, exact word)
     #reg=1 -> pattern=^gene//character or digit
     #reg=2 -> pattern=gene 
-#targets and sources do not include direct feedback 
-#only works with db with following columns: "source_genesymbol"     "target_genesymbol"    
+#db must have the following columns: "source_genesymbol"     "target_genesymbol"    
 # "is_directed"           "is_stimulation"        "is_inhibition"
-search_gene <-function(gene, db,reg=0){
+search_gene <-function(gene, db, reg=0){
   match=NULL
   gene_names=NULL
   
+  #regular expressions
   if (reg==1){
     gene=c(paste("^",gene, "\\d", sep = ""),paste("^",gene, "\\w", sep = ""))
   }else if (!reg){
     gene=paste("^",gene, "$", sep = "")
   }
-    
+  
+  #identify targets and sources
   for (i in 1:length(gene)) {
-    new_match=grep(gene[i], db$target_genesymbol)
-    gene_names=c(gene_names,db[new_match,]$target_genesymbol)
-    new_match2=grep(gene[i], db$source_genesymbol)
-    gene_names=c(gene_names,db[new_match2,]$source_genesymbol)
-    match=c(match,new_match,new_match2)
+    upstream=grep(gene[i], db$target_genesymbol)
+    gene_names=c(gene_names, db[upstream,]$target_genesymbol)
+    upstream_names=db[upstream,]$source_genesymbol
+    downstream=grep(gene[i], db$source_genesymbol)
+    gene_names=c(gene_names, db[downstream,]$source_genesymbol)
+    downstream_names=db[downstream,]$target_genesymbol
+    match=c(match,upstream,downstream)
   }
   
   gene_names<-unique(gene_names)
-  db= db[unique(match),-c(1,2,5,9,10)]
+  db= db[match,-c(1,2,5,9,10)]
+  targets=db %>% filter(target_genesymbol %in% downstream_names)
+  sources=db %>% filter(source_genesymbol %in% upstream_names)
+  names(targets)[names(targets)=="target_genesymbol"] <- "name"
+  names(sources)[names(sources)=="source_genesymbol"] <- "name"
   
-  targets=subset(db, !(target_genesymbol %in% gene_names))
-  sources=subset(db, !(source_genesymbol %in% gene_names))
+  targets_positive<- list(
+    "transcriptional"=unique(filter(targets, (type=="transcriptional"|type=="mirna_transcriptional") & is_stimulation==1))$name,
+    "post_translational"=unique(filter(targets, type=="post_translational" & is_stimulation==1)$name))
+  targets_negative<- list(
+    "transcriptional"=unique(filter(targets, (type=="transcriptional"|type=="mirna_transcriptional") & is_inhibition==1))$name,
+    "post_translational"=unique(filter(targets, type=="post_translational" & is_inhibition==1)$name))
+  sources_positive<- list(
+    "transcriptional"=unique(filter(sources, (type=="transcriptional"|type=="mirna_transcriptional") & is_stimulation==1)$name,
+    "post_translational"=unique(filter(sources, type=="post_translational" & is_stimulation==1))$name))
+  sources_negative<- list(
+    "transcriptional"=unique(filter(sources, (type=="transcriptional"|type=="mirna_transcriptional") & is_inhibition==1))$name,
+    "post_translational"=unique(filter(sources, type=="post_translational" & is_inhibition==1))$name)
   
-  targets_stimulation=unique(filter(targets, is_stimulation&!is_inhibition))
-  targets_stimulation=select(targets_stimulation,target_genesymbol, type)
+  gene_db <-list(gene_names,db, targets_positive,targets_negative, sources_positive, sources_negative)
+  names(gene_db) <- c("gene_name","db","targets_positive", "targets_negative","sources_positive", "sources_negative")
   
-  targets_inhibition=unique(filter(targets, !is_stimulation&is_inhibition))
-  targets_inhibition=select(targets_inhibition,target_genesymbol, type)
-  
-  sources_stimulation=unique(filter(sources, is_stimulation&!is_inhibition))
-  sources_stimulation=select(sources_stimulation,source_genesymbol, type)
-  
-  sources_inhibition=unique(filter(sources, !is_stimulation&is_inhibition))
-  sources_inhibition=select(sources_inhibition,source_genesymbol, type)
-  
-  others= subset(db, !(source_genesymbol %in%c(targets_stimulation,targets_inhibition,sources_stimulation,sources_inhibition,gene_names)))
-  others= unique(c(others$target_genesymbol,others$source_genesymbol))
-  
-  dfs <- c("targets_stimulation", "targets_inhibition", "sources_stimulation", "sources_inhibition")
-  
-  for(df in dfs)
-    assign(df, setNames(get(df),  c("name", "type")))
-  
-  genes_db <- list("db" = db,
-                   "names" = gene_names, 
-                   "activates"=targets_stimulation,
-                   "inhibits"= targets_inhibition,
-                   "activated_by" =sources_stimulation,
-                   "inhibited_by" = sources_inhibition,
-                   "others"=others)
-  
-  return(genes_db) 
+  return(gene_db) 
 }
+
+#another function with more info about two genes
+
+
