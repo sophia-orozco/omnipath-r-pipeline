@@ -16,37 +16,80 @@ find_paths_db <- function(paths,db){
   return(interac_db)
 }
 ##################################################################################
-# plot graph from interactions
-plot_paths <- function(start_nodes,end_nodes,db,type=0){
-  gr_graph <- interaction_graph(db)
-  paths <-find_all_paths(graph = gr_graph, 
-                         start = start_nodes, 
-                         end = end_nodes, attr = 'name')
-  paths_db=find_paths_db(paths,db)
-  paths_db=paths_db[-which(paths_db$is_stimulation==0&paths_db$is_inhibition==0),]
-  gr_graph <- interaction_graph(paths_db)
+# get interactions between genes. Return interaction sign, type and reference
+#get_gene_interaction <- function(gene1, gene2,db){
+  
+#    upstream=grep(gene1, db$target_genesymbol)
+#    gene_names=c(gene_names, db[upstream,]$target_genesymbol)
+#    upstream_names=db[upstream,]$source_genesymbol
+#    downstream=grep(gene[i], db$source_genesymbol)
+#    gene_names=c(gene_names, db[downstream,]$source_genesymbol)
+#    downstream_names=db[downstream,]$target_genesymbol
+#    match=c(match,upstream,downstream)
+  
+#  gene_names<-unique(gene_names)
+#  db= db[match,]
+#  return(interac_db)
+#}
+##################################################################################
+#plot network
+plot_network <- function(db,type=0, filter="none",gene="none"){
+  
+  #check database type (mirna vs all)
+  
+  db_final=db[-which(db$is_stimulation==0&db$is_inhibition==0),]
+  
+  #check for mirna in db
+  mirna=grep("hsa",db$source_genesymbol)
+  #if no mirna in database keep only stimulation or inhibition
+  if(length(mirna)){
+    db_mirna=db[mirna,]
+    db_final=bind_rows(db_final,db_mirna)
+  }
+  
+  #filter option only for plot_neighbours
+  if(filter!="none"){
+    if(filter=="sources"){
+      db_final=filter(db_final, (target_genesymbol==gene))
+    }else if(filter=="targets"){
+      db_final=filter(db_final, (source_genesymbol==gene))
+    }else if(filter=="positive_targets"){
+      db_final=filter(db_final, (source_genesymbol==gene& is_stimulation==1))
+    }else if(filter=="negative_targets"){
+      #if gene is mirna
+      if(length(grep("hsa", gene))){ 
+        db_final=filter(db_final, (source_genesymbol==gene& is_directed==1))
+      }else{
+        db_final=filter(db_final, (source_genesymbol==gene& is_inhibition==1))
+      }
+    }else if(filter=="positive_sources"){
+      db_final=filter(db_final, (target_genesymbol==gene& is_stimulation==1))
+    }else if(filter=="negative_sources"){
+      db_final=filter(db_final, (target_genesymbol==gene& (is_inhibition==1)))
+      #if source is an mirna
+      if(length(mirna)){
+        db_mirna=filter(db_mirna, (target_genesymbol==gene& (is_directed==1)))
+        db_final=bind_rows(db_final,db_mirna)
+      }
+    }
+  }
+  
+  gr_graph <- interaction_graph(db_final)
   
   ecol=(rep("gray", ecount(gr_graph)))
+  ecol[E(gr_graph)$is_directed==1]="red1"
   ecol[E(gr_graph)$is_stimulation==1]="chartreuse4"
   ecol[E(gr_graph)$is_inhibition==1]="brown1"
+  #if it has both positive and negative interactions
+  ecol[E(gr_graph)$is_inhibition==1&E(gr_graph)$is_stimulation==1]="blue"
   
   etype=(rep("solid", ecount(gr_graph)))
   if(type){
-    etype[E(gr_graph)$is_stimulation==1 &
-           (E(gr_graph)$type=="transcriptional"|
-              E(gr_graph)$type=="mirna_transcriptional")]="solid"
-    etype[E(gr_graph)$is_stimulation==1&
-           E(gr_graph)$type=="post_transcriptional"]="dashed"
-    etype[E(gr_graph)$is_stimulation==1&
-           E(gr_graph)$type=="post_translational"]="dashed"
-    
-    etype[E(gr_graph)$is_inhibition==1 &
-           (E(gr_graph)$type=="transcriptional"|
-              E(gr_graph)$type=="mirna_transcriptional")]="solid"
-    etype[E(gr_graph)$is_inhibition==1&
-           E(gr_graph)$type=="post_transcriptional"]="dashed"
-    etype[E(gr_graph)$is_inhibition==1&
-           E(gr_graph)$type== "post_translational"]="dashed"
+    etype[(E(gr_graph)$type=="transcriptional"|
+               E(gr_graph)$type=="mirna_transcriptional")]="solid"
+    etype[(E(gr_graph)$type=="post_transcriptional"|
+            E(gr_graph)$type=="post_translational"|
+              E(gr_graph)$type=="lncrna_post_transcriptional")]="dashed"
   } 
   
   plot(gr_graph, edge.color=ecol, vertex.label.color="black",
@@ -57,10 +100,30 @@ plot_paths <- function(start_nodes,end_nodes,db,type=0){
     legend("bottomleft",legend = c("transcriptional","post_transcriptional/translational"),
            lty=c("solid","dashed"), cex = 0.8, bty = "n", ncol = 1)
   }
-
+  
   plot_res <- recordPlot()
   
   return(plot_res)
+}
+
+##################################################################################
+# plot gene neighbours
+plot_neighbours <- function(gene,db,type=0, filter="none"){
+  db=search_gene(gene, db, reg=0)$db
+  res=plot_network(db, type, filter, gene)
+  return(res)
+}
+
+##################################################################################
+# plot graph from interactions
+plot_paths <- function(start_nodes,end_nodes,db,type=0){
+  gr_graph <- interaction_graph(db)
+  paths <-find_all_paths(graph = gr_graph, 
+                         start = start_nodes, 
+                         end = end_nodes, attr = 'name')
+  paths_db=find_paths_db(paths,db)
+  res=plot_network(paths_db, type)
+  return(res)
 }
 ##################################################################################
 # Takes any interaction db and returns those with inhibition or stimulation, 
@@ -173,7 +236,7 @@ search_gene <-function(gene, db, reg=0){
   }
   
   gene_names<-unique(gene_names)
-  db= db[match,-c(1,2,5,9,10)]
+  db= db[match,]#-c(1,2,5,9,10)
   targets=db %>% filter(target_genesymbol %in% downstream_names)
   sources=db %>% filter(source_genesymbol %in% upstream_names)
   names(targets)[names(targets)=="target_genesymbol"] <- "name"
