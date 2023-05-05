@@ -213,9 +213,10 @@ find_signed_paths <- function(start_nodes,end_nodes,db,type_flag=0,type_option="
     #reg=2 -> pattern=gene 
 #db must have the following columns: "source_genesymbol"     "target_genesymbol"    
 # "is_directed"           "is_stimulation"        "is_inhibition"
-search_gene <-function(gene, db, reg=0){
+search_gene <-function(gene, db, filter="none", reg=0){
   match=NULL
   gene_names=NULL
+  #list_temp=NULL
   
   #regular expressions
   if (reg==1){
@@ -237,30 +238,98 @@ search_gene <-function(gene, db, reg=0){
   
   gene_names<-unique(gene_names)
   db= db[match,]#-c(1,2,5,9,10)
+  
+  #check for mirna in db
+  mirna=grep("hsa",db$source_genesymbol)
+  if(length(mirna)){
+    db_mirna=db[mirna,]
+  }
+  
   targets=db %>% filter(target_genesymbol %in% downstream_names)
   sources=db %>% filter(source_genesymbol %in% upstream_names)
   names(targets)[names(targets)=="target_genesymbol"] <- "name"
   names(sources)[names(sources)=="source_genesymbol"] <- "name"
   
-  targets_positive<- list(
-    "transcriptional"=unique(filter(targets, (type=="transcriptional"|type=="mirna_transcriptional") & is_stimulation==1))$name,
-    "post_translational"=unique(filter(targets, type=="post_translational" & is_stimulation==1)$name))
-  targets_negative<- list(
-    "transcriptional"=unique(filter(targets, (type=="transcriptional"|type=="mirna_transcriptional") & is_inhibition==1))$name,
-    "post_translational"=unique(filter(targets, type=="post_translational" & is_inhibition==1)$name))
-  sources_positive<- list(
-    "transcriptional"=unique(filter(sources, (type=="transcriptional"|type=="mirna_transcriptional") & is_stimulation==1)$name,
-    "post_translational"=unique(filter(sources, type=="post_translational" & is_stimulation==1))$name))
-  sources_negative<- list(
-    "transcriptional"=unique(filter(sources, (type=="transcriptional"|type=="mirna_transcriptional") & is_inhibition==1))$name,
-    "post_translational"=unique(filter(sources, type=="post_translational" & is_inhibition==1))$name)
   
-  gene_db <-list(gene_names,db, targets_positive,targets_negative, sources_positive, sources_negative)
-  names(gene_db) <- c("gene_name","db","targets_positive", "targets_negative","sources_positive", "sources_negative")
+  if(length(downstream_names)){
+    #positive
+    transcriptional=unique(filter(targets, (type=="transcriptional"|type=="mirna_transcriptional") & is_stimulation==1))$name
+    post_translational=unique(filter(targets, type=="post_translational" & is_stimulation==1)$name)
+    
+    targets_positive<- list("transcriptional"=transcriptional,"post_translational"=post_translational)
+    targets_positive=targets_positive[lapply(targets_positive, length)>0]
+    
+    #negative
+    transcriptional=unique(filter(targets, (type=="transcriptional"|type=="mirna_transcriptional") & is_inhibition==1))$name
+    post_translational=unique(filter(targets, type=="post_translational" & is_inhibition==1)$name)
+    
+    if(length(mirna)){
+     post_transcriptional=unique(filter(targets, type=="post_transcriptional" & is_directed==1))$name
+    }
+    targets_negative<- list("transcriptional"=transcriptional,"post_translational"=post_translational,"post_transcriptional"=post_transcriptional)
+    targets_negative=targets_negative[lapply(targets_negative, length)>0]
+  }
+  if(length(upstream_names)){
+    #positive
+    transcriptional=unique(filter(sources, (type=="transcriptional"|type=="mirna_transcriptional") & is_stimulation==1))$name
+    post_translational=unique(filter(sources, type=="post_translational" & is_stimulation==1))$name
+    
+    sources_positive<- list("transcriptional"=transcriptional,"post_translational"=post_translational)
+    sources_positive=sources_positive[lapply(sources_positive, length)>0]
+    
+    #negative
+    transcriptional=unique(filter(sources, (type=="transcriptional"|type=="mirna_transcriptional") & is_inhibition==1))$name
+    post_translational=unique(filter(sources, type=="post_translational" & is_inhibition==1))$name
+    
+    if(length(mirna)){
+      post_transcriptional=unique(filter(sources, type=="post_transcriptional" & is_directed==1))$name
+    }
+    sources_negative<- list("transcriptional"=transcriptional,"post_translational"=post_translational,"post_transcriptional"=post_transcriptional)
+    sources_negative=sources_negative[lapply(sources_negative, length)>0]
+  }
+
+  
+  gene_db<-list(gene_names,db, sources_positive, sources_negative, targets_positive,targets_negative)
+  names(gene_db) <- c("gene_name","db","positive_sources","negative_sources","positive_targets","negative_targets")
+  gene_db=gene_db[lapply(gene_db, length)>0]
+  
+  if(filter!="none"){
+    if(filter=="targets"){
+      gene_db<- list(gene_db$positive_targets,gene_db$negative_targets)
+      names(gene_db) <- c("positive_targets","negative_targets")
+    }else if(filter=="sources"){
+      gene_db<- list(gene_db$positive_sources,gene_db$negative_sources)
+      names(gene_db) <- c("positive_sources","negative_sources")
+    }else{
+      gene_db=gene_db[filter]
+    }
+  }
   
   return(gene_db) 
 }
 
 #another function with more info about two genes
+get_gene_interaction<-function(gene1,gene2,db, short_db=FALSE){
+  genes<-NULL
+  #genes<-list(c(gene1,gene2),c(gene2,gene1))
+  k=1
+  for (i in 1:length(gene1)) {
+    for (j in 1:length(gene2)) {
+      genes_temp1=c(gene1[i],gene2[j])
+      genes_temp2=c(gene2[j],gene1[i])
+      genes [[k]]<-(genes_temp1)
+      genes [[k+1]]<-(genes_temp2)
+      k=k+2
+    }
+  }
+  genes=unique(genes)
+  gene_int=find_paths_db(genes,db)
+  if(short_db){
+    gene_int=gene_int[,c(3,4,5,6,7,14)] 
+  }
+  return(gene_int)
+}
+
+#generate model. using find all paths -> find paths_db -> search gene for each node
 
 

@@ -3,6 +3,8 @@ library(OmnipathR)
 source("./omnipath_myfunctions.R")
 
 interactions <- import_all_interactions()
+interactions_mirna <- import_mirnatarget_interactions()
+
 
 #filter by references
 interactions <- with_references(interactions)
@@ -61,7 +63,20 @@ plot_neighbours(gene,interactions,type=0, filter = "sources")
 plot_neighbours(gene,interactions,type=0, filter = "positive_sources")
 plot_neighbours(gene,interactions,type=0, filter = "negative_sources")
 plot_neighbours(gene,interactions,type=0, filter = "targets")
-plot_neighbours(gene,interactions,type=0, filter = "negative_targets")
 plot_neighbours(gene,interactions,type=0, filter = "positive_targets")
+plot_neighbours(gene,interactions,type=0, filter = "negative_targets")
 
-search_gene(gene, interactions)$sources_negative
+#search_gene(gene, interactions_mirna)
+
+search_gene(gene, interactions, "sources")
+search_gene(gene, interactions, "positive_sources")
+search_gene(gene, interactions, "negative_sources")
+search_gene(gene, interactions, "targets")
+search_gene(gene, interactions, "positive_targets")
+search_gene(gene, interactions, "negative_targets")
+
+
+set1=c("GRHL2","ZEB1","hsa-miR-200c")
+set2=c("GRHL2","ZEB1","hsa-miR-200c")
+get_gene_interaction(set1,set2,interactions)#[1,]$references
+get_gene_interaction(set1,set2,interactions, TRUE)
