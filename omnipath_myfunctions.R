@@ -126,11 +126,11 @@ plot_direct <- function(genes,db,type=0){
 }
 ##################################################################################
 # plot graph from interactions
-plot_paths <- function(start_nodes,end_nodes,db,type=0){
+plot_paths <- function(nodes,db,type=0){
   gr_graph <- interaction_graph(db)
   paths <-find_all_paths(graph = gr_graph, 
-                         start = start_nodes, 
-                         end = end_nodes, attr = 'name')
+                         start = nodes, 
+                         end = nodes, attr = 'name')
   paths_db=find_paths_db(paths,db)
   res=plot_network(paths_db, type)
   return(res)
@@ -362,21 +362,21 @@ get_gene_interaction<-function(gene1,db, short_db=FALSE){
 
 save_bnet <-function(genes, db, filename, include_indirect=FALSE){
   if(include_indirect){
-    #get full db
+    #get full dd
+
     gr_graph <- interaction_graph(db)
     paths <-find_all_paths(graph = gr_graph, 
-                           start = start_nodes, 
-                           end = end_nodes, attr = 'name')
+                           start = genes, 
+                           end = genes, attr = 'name')
     db=find_paths_db(paths,db)
     genes=unique(c(paths_db$target_genesymbol,paths_db$source_genesymbol))
   }else{
     db=get_gene_interaction(genes,db)
     
     #remove nodes without sources from genes list and db 
-    genes=genes[genes %in% db$target_genesymbol]
-    db=subset(db, source_genesymbol %in% genes)
-    db=distinct(db, source_genesymbol, target_genesymbol, is_directed,
-                is_stimulation,is_inhibition, .keep_all = TRUE)
+    #genes=genes[genes %in% db$target_genesymbol]
+    #db=subset(db, source_genesymbol %in% genes)
+    #db=distinct(db, source_genesymbol, target_genesymbol, is_directed, is_stimulation,is_inhibition, .keep_all = TRUE)
   }
   
     positive=rep(list(c(0)),length(genes))
@@ -389,42 +389,77 @@ save_bnet <-function(genes, db, filename, include_indirect=FALSE){
       pos=search_gene(genes[i], db)$positive_sources
       neg=search_gene(genes[i], db)$negative_sources
       
-      #add positive and negative relations in a list
+      #add positive and negative relations in a vector
       if(!is.null(pos)){
         positive[[i]]=list_c(pos)
         positive[[i]]=unique(positive[[i]])
-        if(length(positive[[i]])==1){
-          activators=paste("(",positive[[i]][1],")", sep = "")
-        }else{
-          activators=paste("(",positive[[i]][1], sep = "")
-          for (j in 2:length(positive[[i]])) {
-            activators=paste(activators,"|",positive[[i]][j], sep = "")
-          }
-          activators=paste(activators,")", sep = "")
-        }
+        
       }
       if(!is.null(neg)){
         negative[[i]]=list_c(neg)
         negative[[i]]=unique(negative[[i]])
-        if(length(negative[[i]])==1){
-          repressors=paste("(",negative[[i]][1],")", sep = "")
-        }else{
-          repressors=paste("(",negative[[i]][1], sep = "")
-          for (j in 2:length(negative[[i]])) {
-            repressors=paste(repressors,"|",negative[[i]][j], sep = "")
-          }
-          repressors=paste(repressors,")", sep = "")
+      }
+      
+      #prioritize interactions with more supporting evidence
+      #negative[[i]][duplicated(negative[[i]])]
+      #positive[[i]][duplicated(positive[[i]])]
+      #remove interactions that are both activating and repressing
+      #positive[[i]][(positive[[i]] %in% negative[[i]])]
+      #negative[[i]][(negative[[i]] %in% positive[[i]])]
+      
+      #negative[[i]][!(negative[[i]] %in% positive[[i]])]
+      
+      #if(positive[[i]][!(positive[[i]] %in% negative[[i]])])
+      if(any(duplicated(c(positive[[i]],negative[[i]])))){
+        repeated_nodes=positive[[i]][(positive[[i]] %in% negative[[i]])]
+        #if pos exists positive[[i]] cannot be zero and the repeated interaction exists
+        if(!is.null(pos)){
+          print(paste(repeated_nodes," activates and represses ",genes[i],"; only repression is incluced", sep = ""))
+        }
+        #if activators are also repressors, remove activating interaction
+        positive[[i]]=positive[[i]][!(positive[[i]] %in% negative[[i]])]
+        if(length(positive[[i]])==0){
+          positive[[i]]=0
         }
       }
       
-      if(activators!=0&repressors!=0){
+      if(length(positive[[i]])==1){
+        if(positive[[i]]!=0){
+          activators=paste("(",positive[[i]][1],")", sep = "")
+        }
+      }else if(length(positive[[i]])>1){
+        activators=paste("(",positive[[i]][1], sep = "")
+        for (j in 2:length(positive[[i]])) {
+          activators=paste(activators,"|",positive[[i]][j], sep = "")
+        }
+        activators=paste(activators,")", sep = "")
+      }
+      
+
+      if(length(negative[[i]])==1){
+        if(negative[[i]]!=0){
+          repressors=paste("(",negative[[i]][1],")", sep = "")
+        }
+      }else if(length(negative[[i]])>1){
+        repressors=paste("(",negative[[i]][1], sep = "")
+        for (j in 2:length(negative[[i]])) {
+          repressors=paste(repressors,"|",negative[[i]][j], sep = "")
+        }
+        repressors=paste(repressors,")", sep = "")
+      }
+      
+      
+      if(activators!=0&repressors!=0){ #activators and repressors
         #if the same gene is both in activators and repressors, remove it
         
         factors[i]=paste(activators," & !",repressors, sep = "")
-      }else if(activators!=0&repressors==0){
+      }else if(activators!=0&repressors==0){ #only activators
         factors[i]=activators
-      }else{
+      }else if(activators==0&repressors!=0){ #only repressors
         factors[i]=paste("!",repressors, sep = "")
+      }else{#no activators or repressors: input node
+        print(paste("No inputs found for ",genes[i],"; added as input", sep = ""))
+        factors[i]=genes[i]
       }
       
       }

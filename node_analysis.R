@@ -38,10 +38,10 @@ find_signed_paths(start_nodes, end_nodes, interactions, type_flag = 1)
 find_signed_paths(start_nodes, end_nodes, interactions, type_flag = 1,type_option = "transcriptional")
 
 #plot a graph with interactions 
-plot_paths(start_nodes, end_nodes, interactions)
+plot_paths(start_nodes, interactions)
 
 #plot a graph with interactions and their type
-plot_paths(start_nodes, end_nodes, interactions, 1)
+plot_paths(start_nodes, interactions, 1)
 
 #plot_neighbours("TFAP2A",interactions,type=0)
 
@@ -86,7 +86,7 @@ a=get_gene_interaction(nodes,interactions)
 plot_network(a,type=0)
   
 
-plot_paths(nodes, nodes, interactions)
+plot_paths(nodes, interactions)
 
 gr_graph <- interaction_graph(interactions)
 find_all_paths(graph = gr_graph, 
@@ -102,22 +102,21 @@ list_c(search_gene(gene, interactions)$positive_negative)
 
 #test paths: plots and bnet file should have the same output
 
-
-#Direct interactions
 genes=c("GRHL2","ZEB1","hsa-miR-200c")
 genes=c("GRHL2","ZEB1","hsa-miR-200c","TP63","CDH1","TWIST1")
+
+
+#Only direct interactions
 #plot
 plot_direct(genes,interactions)
 #bnet
 save_bnet(genes, interactions,include_indirect=FALSE)
 
-#Indirect interactions
+#Indluce Indirect interactions
+genes=c("GRHL2","ZEB1")
 #plot
+plot_paths(genes, interactions)
 #bnet
+save_bnet(genes, interactions,include_indirect=TRUE)
 
-
-database_test=get_gene_interaction(set1,interactions)
-search_gene(set1[4], database_test)
-
-plot_paths(genes, genes, interactions)
 
