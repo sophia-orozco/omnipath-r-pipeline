@@ -56,6 +56,7 @@ mirnas=c("hsa-miR-22-3p", "hsa-miR-30a", "hsa-miR-203-3p", "hsa-miR-222-3p")
 
 gene=mirnas[2]
 gene="ZEB1"
+gene_list=c("ZEB1","GRHL2","TP63")
 
 plot_neighbours(gene,interactions,type=0)
 plot_neighbours(gene,interactions,type=1)
@@ -65,7 +66,6 @@ plot_neighbours(gene,interactions,type=0, filter = "negative_sources")
 plot_neighbours(gene,interactions,type=0, filter = "targets")
 plot_neighbours(gene,interactions,type=0, filter = "positive_targets")
 plot_neighbours(gene,interactions,type=0, filter = "negative_targets")
-
 #search_gene(gene, interactions_mirna)
 
 search_gene(gene, interactions, "sources")
@@ -76,7 +76,48 @@ search_gene(gene, interactions, "positive_targets")
 search_gene(gene, interactions, "negative_targets")
 
 
-set1=c("GRHL2","ZEB1","hsa-miR-200c")
-set2=c("GRHL2","ZEB1","hsa-miR-200c")
-get_gene_interaction(set1,set2,interactions)#[1,]$references
-get_gene_interaction(set1,set2,interactions, TRUE)
+set1=c("GRHL2","ZEB1","hsa-miR-200c","TP63")
+a=get_gene_interaction(set1,interactions)#[1,]$references
+get_gene_interaction(set1,interactions, TRUE)
+
+#build a network from gene list
+nodes=read.csv("mymodel.bnet", skip = 2)$targets
+a=get_gene_interaction(nodes,interactions)
+plot_network(a,type=0)
+  
+
+plot_paths(nodes, nodes, interactions)
+
+gr_graph <- interaction_graph(interactions)
+find_all_paths(graph = gr_graph, 
+               start = nodes, 
+               end = nodes, attr = 'name')
+
+save_bnet(set1, interactions, include_indirect=FALSE)
+  
+list_c(search_gene(gene, interactions)$positive_sources)
+list_c(search_gene(gene, interactions)$positive_negative)
+
+
+
+#test paths: plots and bnet file should have the same output
+
+
+#Direct interactions
+genes=c("GRHL2","ZEB1","hsa-miR-200c")
+genes=c("GRHL2","ZEB1","hsa-miR-200c","TP63","CDH1","TWIST1")
+#plot
+plot_direct(genes,interactions)
+#bnet
+save_bnet(genes, interactions,include_indirect=FALSE)
+
+#Indirect interactions
+#plot
+#bnet
+
+
+database_test=get_gene_interaction(set1,interactions)
+search_gene(set1[4], database_test)
+
+plot_paths(genes, genes, interactions)
+

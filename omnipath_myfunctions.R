@@ -1,4 +1,5 @@
 library(dplyr)
+library(purrr)
 library(OmnipathR)
 library(igraph)
 library(igraphdata)
@@ -36,7 +37,9 @@ find_paths_db <- function(paths,db){
 plot_network <- function(db,type=0, filter="none",gene="none"){
   
   #check database type (mirna vs all)
+  #...
   
+  #remove genes with no stimuation and no inhibition
   db_final=db[-which(db$is_stimulation==0&db$is_inhibition==0),]
   
   #check for mirna in db
@@ -48,7 +51,7 @@ plot_network <- function(db,type=0, filter="none",gene="none"){
   }
   
   #filter option only for plot_neighbours
-  if(filter!="none"){
+  if(filter!="none"& gene!="none"){
     if(filter=="sources"){
       db_final=filter(db_final, (target_genesymbol==gene))
     }else if(filter=="targets"){
@@ -79,23 +82,24 @@ plot_network <- function(db,type=0, filter="none",gene="none"){
   ecol=(rep("gray", ecount(gr_graph)))
   ecol[E(gr_graph)$is_directed==1]="red1"
   ecol[E(gr_graph)$is_stimulation==1]="chartreuse4"
-  ecol[E(gr_graph)$is_inhibition==1]="brown1"
+  #ecol[E(gr_graph)$is_inhibition==1]="brown1"
   #if it has both positive and negative interactions
   ecol[E(gr_graph)$is_inhibition==1&E(gr_graph)$is_stimulation==1]="blue"
   
   etype=(rep("solid", ecount(gr_graph)))
   if(type){
     etype[(E(gr_graph)$type=="transcriptional"|
+             E(gr_graph)$type=="mirna_transcriptional")]="solid"
+    etype[(E(gr_graph)$type=="transcriptional"|
                E(gr_graph)$type=="mirna_transcriptional")]="solid"
     etype[(E(gr_graph)$type=="post_transcriptional"|
             E(gr_graph)$type=="post_translational"|
               E(gr_graph)$type=="lncrna_post_transcriptional")]="dashed"
   } 
-  
-  plot(gr_graph, edge.color=ecol, vertex.label.color="black",
+  #plot(gr_graph, edge.color=ecol)
+  g=plot(gr_graph, edge.color=ecol,edge.lty=etype, vertex.label.color="black",
        vertex.label.cex=.8, vertex.size=20, vertex.shape="circle",vertex.color="white",
-       vertex.label.family="Helvetica",edge.curved=0.8,
-       edge.arrow.size=0.5,layout=layout_with_fr,edge.lty=etype)
+       vertex.label.family="Helvetica",edge.arrow.size=0.5,layout=layout_with_fr) #edge.curved=0.8
   if(type){
     legend("bottomleft",legend = c("transcriptional","post_transcriptional/translational"),
            lty=c("solid","dashed"), cex = 0.8, bty = "n", ncol = 1)
@@ -113,7 +117,13 @@ plot_neighbours <- function(gene,db,type=0, filter="none"){
   res=plot_network(db, type, filter, gene)
   return(res)
 }
-
+##################################################################################
+# plot direct interactions between a set of genes
+plot_direct <- function(genes,db,type=0){
+  db=get_gene_interaction(genes,db)
+  res=plot_network(db,type)
+  return(res)
+}
 ##################################################################################
 # plot graph from interactions
 plot_paths <- function(start_nodes,end_nodes,db,type=0){
@@ -221,21 +231,27 @@ search_gene <-function(gene, db, filter="none", reg=0){
   #regular expressions
   if (reg==1){
     gene=c(paste("^",gene, "\\d", sep = ""),paste("^",gene, "\\w", sep = ""))
-  }else if (!reg){
-    gene=paste("^",gene, "$", sep = "")
-  }
-  
-  #identify targets and sources
-  for (i in 1:length(gene)) {
-    upstream=grep(gene[i], db$target_genesymbol)
+    for (i in 1:length(gene)) {
+      #identify targets and sources
+      upstream=grep(gene[i], db$target_genesymbol)
+      gene_names=c(gene_names, db[upstream,]$target_genesymbol)
+      upstream_names=db[upstream,]$source_genesymbol
+      downstream=grep(gene[i], db$source_genesymbol)
+      gene_names=c(gene_names, db[downstream,]$source_genesymbol)
+      downstream_names=db[downstream,]$target_genesymbol
+      match=c(match,upstream,downstream)
+    }
+  }else{
+    #identify targets and sources
+    upstream=which(db$target_genesymbol==gene)
     gene_names=c(gene_names, db[upstream,]$target_genesymbol)
     upstream_names=db[upstream,]$source_genesymbol
-    downstream=grep(gene[i], db$source_genesymbol)
+    downstream=which(db$source_genesymbol==gene)
     gene_names=c(gene_names, db[downstream,]$source_genesymbol)
     downstream_names=db[downstream,]$target_genesymbol
     match=c(match,upstream,downstream)
   }
-  
+
   gene_names<-unique(gene_names)
   db= db[match,]#-c(1,2,5,9,10)
   
@@ -250,6 +266,10 @@ search_gene <-function(gene, db, filter="none", reg=0){
   names(targets)[names(targets)=="target_genesymbol"] <- "name"
   names(sources)[names(sources)=="source_genesymbol"] <- "name"
   
+  targets_positive=list()
+  targets_negative=list()
+  sources_positive=list()
+  sources_negative=list()
   
   if(length(downstream_names)){
     #positive
@@ -265,6 +285,8 @@ search_gene <-function(gene, db, filter="none", reg=0){
     
     if(length(mirna)){
      post_transcriptional=unique(filter(targets, type=="post_transcriptional" & is_directed==1))$name
+    }else{
+      post_transcriptional=list()
     }
     targets_negative<- list("transcriptional"=transcriptional,"post_translational"=post_translational,"post_transcriptional"=post_transcriptional)
     targets_negative=targets_negative[lapply(targets_negative, length)>0]
@@ -283,6 +305,8 @@ search_gene <-function(gene, db, filter="none", reg=0){
     
     if(length(mirna)){
       post_transcriptional=unique(filter(sources, type=="post_transcriptional" & is_directed==1))$name
+    }else{
+      post_transcriptional=list()
     }
     sources_negative<- list("transcriptional"=transcriptional,"post_translational"=post_translational,"post_transcriptional"=post_transcriptional)
     sources_negative=sources_negative[lapply(sources_negative, length)>0]
@@ -309,8 +333,9 @@ search_gene <-function(gene, db, filter="none", reg=0){
 }
 
 #another function with more info about two genes
-get_gene_interaction<-function(gene1,gene2,db, short_db=FALSE){
+get_gene_interaction<-function(gene1,db, short_db=FALSE){
   genes<-NULL
+  gene2<-gene1
   #genes<-list(c(gene1,gene2),c(gene2,gene1))
   k=1
   for (i in 1:length(gene1)) {
@@ -331,5 +356,83 @@ get_gene_interaction<-function(gene1,gene2,db, short_db=FALSE){
 }
 
 #generate model. using find all paths -> find paths_db -> search gene for each node
+#option for just direct interactions vs find all paths
+
+#if gene is both activator and repressor
+
+save_bnet <-function(genes, db, filename, include_indirect=FALSE){
+  if(include_indirect){
+    #get full db
+    gr_graph <- interaction_graph(db)
+    paths <-find_all_paths(graph = gr_graph, 
+                           start = start_nodes, 
+                           end = end_nodes, attr = 'name')
+    db=find_paths_db(paths,db)
+    genes=unique(c(paths_db$target_genesymbol,paths_db$source_genesymbol))
+  }else{
+    db=get_gene_interaction(genes,db)
+    
+    #remove nodes without sources from genes list and db 
+    genes=genes[genes %in% db$target_genesymbol]
+    db=subset(db, source_genesymbol %in% genes)
+    db=distinct(db, source_genesymbol, target_genesymbol, is_directed,
+                is_stimulation,is_inhibition, .keep_all = TRUE)
+  }
+  
+    positive=rep(list(c(0)),length(genes))
+    negative=rep(list(c(0)),length(genes))
+    factors=rep(0,length(genes))
+    #search genes in targets and get its sources
+    for (i in 1:length(genes)) {
+      activators=0
+      repressors=0
+      pos=search_gene(genes[i], db)$positive_sources
+      neg=search_gene(genes[i], db)$negative_sources
+      
+      #add positive and negative relations in a list
+      if(!is.null(pos)){
+        positive[[i]]=list_c(pos)
+        positive[[i]]=unique(positive[[i]])
+        if(length(positive[[i]])==1){
+          activators=paste("(",positive[[i]][1],")", sep = "")
+        }else{
+          activators=paste("(",positive[[i]][1], sep = "")
+          for (j in 2:length(positive[[i]])) {
+            activators=paste(activators,"|",positive[[i]][j], sep = "")
+          }
+          activators=paste(activators,")", sep = "")
+        }
+      }
+      if(!is.null(neg)){
+        negative[[i]]=list_c(neg)
+        negative[[i]]=unique(negative[[i]])
+        if(length(negative[[i]])==1){
+          repressors=paste("(",negative[[i]][1],")", sep = "")
+        }else{
+          repressors=paste("(",negative[[i]][1], sep = "")
+          for (j in 2:length(negative[[i]])) {
+            repressors=paste(repressors,"|",negative[[i]][j], sep = "")
+          }
+          repressors=paste(repressors,")", sep = "")
+        }
+      }
+      
+      if(activators!=0&repressors!=0){
+        #if the same gene is both in activators and repressors, remove it
+        
+        factors[i]=paste(activators," & !",repressors, sep = "")
+      }else if(activators!=0&repressors==0){
+        factors[i]=activators
+      }else{
+        factors[i]=paste("!",repressors, sep = "")
+      }
+      
+      }
+    
+  #save file
+  bnet=data.frame(targets=genes, factors)
+  return(bnet)
+  #write(bnet, filename)
+  }
 
 
