@@ -466,8 +466,8 @@ save_bnet <-function(genes, db, filename, include_indirect=FALSE){
     
   #save file
   bnet=data.frame(targets=genes, factors)
-  return(bnet)
-  #write(bnet, filename)
+  #return(bnet)
+  write.csv(bnet, filename, quote = FALSE, row.names=FALSE)
   }
 
 

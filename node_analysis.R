@@ -101,7 +101,7 @@ list_c(search_gene(gene, interactions)$positive_negative)
 
 
 #test paths: plots and bnet file should have the same output
-
+genes=c("GRHL2","ZEB1")
 genes=c("GRHL2","ZEB1","hsa-miR-200c")
 genes=c("GRHL2","ZEB1","hsa-miR-200c","TP63","CDH1","TWIST1")
 
@@ -110,13 +110,12 @@ genes=c("GRHL2","ZEB1","hsa-miR-200c","TP63","CDH1","TWIST1")
 #plot
 plot_direct(genes,interactions)
 #bnet
-save_bnet(genes, interactions,include_indirect=FALSE)
+save_bnet(genes, interactions,"test1.bnet",include_indirect=FALSE)
 
 #Indluce Indirect interactions
-genes=c("GRHL2","ZEB1")
 #plot
 plot_paths(genes, interactions)
 #bnet
-save_bnet(genes, interactions,include_indirect=TRUE)
+save_bnet(genes, interactions,"test2.bnet",include_indirect=TRUE)
 
 
