@@ -1,0 +1,90 @@
+---
+title: "Omnipath for building Boolean Networks"
+output: rmdformats::downcute
+date: "2023-05-05"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	#echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+```{r, include=FALSE}
+setwd("/Users/sophia/Documents/MET_project/omnipath-r-pipeline")
+```
+
+# Building a network using Omnipath
+Import interactions from Omnipath
+```{r, include=TRUE}
+#Import libraries
+library(OmnipathR)
+source("./omnipath_myfunctions.R")
+
+#Interactions with references from omnipath
+interactions <- import_all_interactions()
+interactions <- with_references(interactions)
+```
+
+
+## Get interactions of a specific gene
+**search_gene**: Returns database with all the interactions of the input gene, its sources and targets. Can be filtered by: "sources", "positive_sources", "negative_sources", "targets", "positive_targets", "negative_targets"
+```{r, include=TRUE}
+gene="GRHL2"
+search_gene(gene, interactions)
+
+gene="CDH1"
+search_gene(gene, interactions, "negative_sources")
+```
+
+
+## Plot direct interactions of a gene
+**plot_neighbours**:
+```{r, include=TRUE}
+plot_neighbours("GRHL2", interactions)
+plot_neighbours("ZEB2", interactions, type = 1, "negative_sources")
+```
+
+
+## Get interactions for a set of genes
+**get_gene_interaction**:
+```{r, include=TRUE}
+subset_nodes=c("GRHL2","ZEB1")
+get_gene_interaction(subset_nodes, interactions)
+```
+
+
+## Plot direct interactions
+Define genes to include in the network and plot direct interactions between the genes with **plot_direct**. Option type=1 to include interaction type in plot.
+```{r, include=TRUE}
+genes=c("GRHL2","ZEB1","hsa-miR-200c","TWIST1")
+plot_direct(genes,interactions, type = 1)
+```
+
+
+## Plot direct and indirect interactions
+Plot direct and direct interactions from a set of genes to another with **plot_paths**. Option type=1 to include interaction type in plot.
+```{r, include=TRUE}
+start=c("GRHL2","TP63")
+end=c("ZEB1")
+plot_paths(start,end,interactions)
+```
+
+
+## Make a boolean model with just direct interactions
+```{r, include=TRUE}
+save_bnet(genes,genes, interactions,"model_direct.bnet",include_indirect=FALSE)
+read.csv("model_direct.bnet")
+```
+
+
+## Make a boolean model with direct and indirect interactions
+```{r, include=TRUE}
+#genes=c("GRHL2","ZEB1","hsa-miR-200c")
+genes=c("GRHL2","ZEB1","hsa-miR-200c","TP63","CDH1","TWIST1")
+save_bnet(genes,genes, interactions,"model_indirect.bnet",include_indirect=TRUE)
+head(read.csv("model_indirect.bnet"))
+```
