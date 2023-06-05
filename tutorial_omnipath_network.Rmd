@@ -1,6 +1,10 @@
 ---
 title: "Omnipath for building Boolean Networks"
-output: rmdformats::downcute
+output: rmarkdown::github_document
+#output: rmdformats::downcute
+#github_document
+#output: rmdformats::downcute
+#knit: rmarkdown::github_document
 date: "2023-05-05"
 editor_options: 
   chunk_output_type: console
